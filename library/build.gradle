@@ -1,0 +1,12 @@
+apply plugin: 'java-library-distribution'
+
+distributions {
+    main{
+        baseName = 'vertx-rest-mapper'
+    }
+}
+
+dependencies {
+    compile "io.vertx:vertx-web:$vertxVersion"
+}
+
