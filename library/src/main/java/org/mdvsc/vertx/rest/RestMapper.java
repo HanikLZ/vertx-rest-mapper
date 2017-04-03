@@ -4,6 +4,7 @@ import io.vertx.core.http.HttpMethod;
 import io.vertx.core.json.Json;
 import io.vertx.ext.web.Route;
 import io.vertx.ext.web.Router;
+import org.mdvsc.vertx.utils.StringUtils;
 import org.mdvsc.vertx.utils.UrlUtils;
 
 import java.lang.annotation.Annotation;
@@ -12,10 +13,23 @@ import java.util.*;
 
 /**
  * restful routing mapper
+ *
  * @author HanikLZ
  * @since 2017/3/30
  */
 public class RestMapper implements ContextProvider {
+
+    private static final Map<Class<? extends Annotation>, HttpMethod> ANNOTATION_MAP = new HashMap<>();
+
+    static {
+        ANNOTATION_MAP.put(GET.class, HttpMethod.GET);
+        ANNOTATION_MAP.put(PUT.class, HttpMethod.PUT);
+        ANNOTATION_MAP.put(POST.class, HttpMethod.POST);
+        ANNOTATION_MAP.put(HEAD.class, HttpMethod.HEAD);
+        ANNOTATION_MAP.put(PATCH.class, HttpMethod.PATCH);
+        ANNOTATION_MAP.put(DELETE.class, HttpMethod.DELETE);
+        ANNOTATION_MAP.put(OPTIONS.class, HttpMethod.OPTIONS);
+    }
 
     private static final Serializer DEFAULT_SERIALIZER = new Serializer() {
         @Override
@@ -60,6 +74,7 @@ public class RestMapper implements ContextProvider {
 
     /**
      * apply this mapper to vertx router
+     *
      * @param router vertx router
      */
     public void applyTo(final Router router) {
@@ -71,9 +86,10 @@ public class RestMapper implements ContextProvider {
 
     /**
      * add context instance for future injecting
-     * @param clz class to find this object
+     *
+     * @param clz      class to find this object
      * @param instance instance, maybe null
-     * @param <T> class type
+     * @param <T>      class type
      */
     public <T> void addContextInstances(Class<T> clz, T instance) {
         contextMap.put(clz, instance);
@@ -81,6 +97,7 @@ public class RestMapper implements ContextProvider {
 
     /**
      * add context instance for future injecting
+     *
      * @param contexts context objects
      */
     public void addContextInstances(Object... contexts) {
@@ -105,9 +122,10 @@ public class RestMapper implements ContextProvider {
         }
     }
 
-    private <T>void setContext(Class<T> clz, T o, T defaultValue) {
+    private <T> void setContext(Class<T> clz, T o, T defaultValue) {
         if (o == null) {
-            if (defaultValue != null) contextMap.put(clz, defaultValue); else contextMap.remove(clz);
+            if (defaultValue != null) contextMap.put(clz, defaultValue);
+            else contextMap.remove(clz);
         } else {
             contextMap.put(clz, o);
         }
@@ -135,7 +153,7 @@ public class RestMapper implements ContextProvider {
         final ContextProvider provider = extraContextProvider;
         T object = provider != null ? provider.provideContext(clz) : null;
         if (object == null) {
-            object = (T)contextMap.get(clz);
+            object = (T) contextMap.get(clz);
         }
         if (object == null && contextMap.containsKey(clz)) {
             try {
@@ -167,47 +185,23 @@ public class RestMapper implements ContextProvider {
 
     private void applyRouteResource(Router router, Class clz) {
         Annotation[] annotations = clz.getDeclaredAnnotations();
-        URL baseUrl = (URL) Arrays.stream(annotations).filter(annotation -> annotation instanceof URL).findFirst().orElse(null);
+        UrlHolder baseUrlHolder = new UrlHolder(annotations);
         for (Method method : clz.getDeclaredMethods()) {
             Annotation[] methodAnnotations = method.getDeclaredAnnotations();
-            URL url = (URL) Arrays.stream(methodAnnotations).filter(annotation -> annotation instanceof URL).findFirst().orElse(null);
+            Produces produces = baseUrlHolder.produces;
+            Consumes consumes = baseUrlHolder.consumes;
+            UrlHolder urlHolder = new UrlHolder(methodAnnotations);
             boolean hasRegexUrl = false;
-            if (baseUrl != null) hasRegexUrl = baseUrl.regex();
-            if (url != null) hasRegexUrl |= url.regex();
-            String urlStr = UrlUtils.appendUrl(baseUrl, url);
+            if (baseUrlHolder.url != null) hasRegexUrl = baseUrlHolder.url.regex();
+            if (urlHolder.url != null) hasRegexUrl |= urlHolder.url.regex();
+            if (urlHolder.produces != null) produces = urlHolder.produces;
+            if (urlHolder.consumes != null) consumes = urlHolder.consumes;
+            String urlStr = UrlUtils.appendUrl(baseUrlHolder.url, urlHolder.url);
             for (Annotation annotation : methodAnnotations) {
-                HttpMethod httpMethod;
-                String[] consumes, produces;
-                if (annotation instanceof GET) {
-                    httpMethod = HttpMethod.GET;
-                    consumes = ((GET) annotation).consumes();
-                    produces = ((GET) annotation).produces();
-                } else if (annotation instanceof POST) {
-                    httpMethod = HttpMethod.POST;
-                    consumes = ((POST) annotation).consumes();
-                    produces = ((POST) annotation).produces();
-                } else if (annotation instanceof DELETE) {
-                    httpMethod = HttpMethod.DELETE;
-                    consumes = ((DELETE) annotation).consumes();
-                    produces = ((DELETE) annotation).produces();
-                } else if (annotation instanceof PUT) {
-                    httpMethod = HttpMethod.PUT;
-                    consumes = ((PUT) annotation).consumes();
-                    produces = ((PUT) annotation).produces();
-                } else if (annotation instanceof HEAD) {
-                    httpMethod = HttpMethod.HEAD;
-                    consumes = ((HEAD) annotation).consumes();
-                    produces = ((HEAD) annotation).produces();
-                } else if (annotation instanceof OPTIONS) {
-                    httpMethod = HttpMethod.OPTIONS;
-                    consumes = ((OPTIONS) annotation).consumes();
-                    produces = ((OPTIONS) annotation).produces();
-                } else if (annotation instanceof PATCH) {
-                    httpMethod = HttpMethod.PATCH;
-                    consumes = ((PATCH) annotation).consumes();
-                    produces = ((PATCH) annotation).produces();
-                } else continue;
-                MethodHandler restHandler = methodHandlers.computeIfAbsent(annotation.getClass().getName() + urlStr, k -> new MethodHandler(clz,this))
+                HttpMethod httpMethod = ANNOTATION_MAP.get(annotation.annotationType());
+                if (httpMethod == null) continue;
+                MethodHandler restHandler = methodHandlers
+                        .computeIfAbsent(annotation.getClass().getName() + urlStr, k -> new MethodHandler(clz, this))
                         .addHandleMethod(method, methodComparator);
                 Route route;
                 if (hasRegexUrl) {
@@ -215,9 +209,28 @@ public class RestMapper implements ContextProvider {
                 } else {
                     route = router.route(httpMethod, urlStr);
                 }
-                for (String c : consumes) if (!c.isEmpty()) route = route.consumes(c);
-                for (String c : produces) if (!c.isEmpty()) route = route.produces(c);
+                if (consumes != null) for (String c : consumes.value()) if (!StringUtils.isNullOrBlank(c)) route = route.consumes(c.trim());
+                if (produces != null) for (String p : produces.value()) if (!StringUtils.isNullOrBlank(p)) route = route.produces(p.trim());
                 route.handler(restHandler).failureHandler(restHandler);
+            }
+        }
+    }
+
+    private class UrlHolder {
+
+        URL url;
+        Produces produces;
+        Consumes consumes;
+
+        UrlHolder(Annotation[] annotations) {
+            for (Annotation annotation : annotations) {
+                if (annotation instanceof URL) {
+                    url = (URL) annotation;
+                } else if (annotation instanceof Produces) {
+                    produces = (Produces) annotation;
+                } else if (annotation instanceof Consumes) {
+                    consumes = (Consumes) annotation;
+                }
             }
         }
     }

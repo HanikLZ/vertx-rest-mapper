@@ -8,7 +8,8 @@ import java.lang.annotation.*;
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.METHOD })
-public @interface DELETE {
+@Target({ ElementType.TYPE, ElementType.METHOD })
+public @interface Consumes {
+    String[] value();
 }
 

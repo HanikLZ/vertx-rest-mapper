@@ -10,7 +10,5 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.METHOD })
 public @interface PUT {
-    String[] consumes() default "";
-    String[] produces() default "";
 }
 
