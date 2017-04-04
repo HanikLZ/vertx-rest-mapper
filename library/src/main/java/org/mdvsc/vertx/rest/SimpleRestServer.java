@@ -1,11 +1,11 @@
 package org.mdvsc.vertx.rest;
 
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.vertx.core.*;
 import io.vertx.core.http.*;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
-import org.mdvsc.vertx.ResponseConstants;
 
 /**
  * @author HanikLZ
@@ -95,7 +95,7 @@ public class SimpleRestServer extends AbstractVerticle {
     }
 
     protected void onRouterFailure(HttpServerResponse response, Throwable throwable, Serializer serializer) {
-        if (response.getStatusCode() <= 0) response.setStatusCode(ResponseConstants.STATUS_CODE_INTERNAL_SERVER_ERROR);
+        if (response.getStatusCode() <= 0) response.setStatusCode(HttpResponseStatus.INTERNAL_SERVER_ERROR.code());
         if (throwable != null) {
             response.setStatusMessage(throwable.getMessage()).end(serializer.serialize(throwable.getMessage()));
         } else {

@@ -6,6 +6,5 @@ package org.mdvsc.vertx.rest;
  */
 public interface ContextProvider {
     <T> T provideContext(Class<T> clz);
-    void injectContext(Object object);
 }
 

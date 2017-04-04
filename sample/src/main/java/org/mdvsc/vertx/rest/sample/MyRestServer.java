@@ -1,7 +1,6 @@
 package org.mdvsc.vertx.rest.sample;
 
-import io.vertx.ext.web.RoutingContext;
-import org.mdvsc.vertx.ResponseConstants;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import org.mdvsc.vertx.rest.*;
 
 import java.util.stream.Stream;
@@ -18,11 +17,11 @@ public class MyRestServer extends SimpleRestServer implements MethodInterceptor 
     }
 
     @Override
-    public void intercept(RoutingContext context, MethodCaller caller) {
+    public void intercept(MethodCaller caller) {
         if (Stream.of(caller.getMethodCache().getAnnotations()).anyMatch(annotation -> annotation instanceof TestFilter)) {
-            caller.endWithCall(context);
+            caller.endWithCall();
         } else {
-            context.fail(ResponseConstants.STATUS_CODE_UNAUTHORIZED);
+            caller.endWithFail(HttpResponseStatus.UNAUTHORIZED);
         }
     }
 }

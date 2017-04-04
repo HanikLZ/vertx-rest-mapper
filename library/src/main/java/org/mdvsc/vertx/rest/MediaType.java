@@ -8,7 +8,6 @@ public class MediaType {
     
     private MediaType() {}
 
-    public static final String CONTENT_TYPE = "content-type";
     public static final String WILDCARD = "*/*";
     public static final String MEDIA_TYPE_WILDCARD = "*";
     public static final String APPLICATION_FORM_URLENCODED = "application/x-www-form-urlencoded";

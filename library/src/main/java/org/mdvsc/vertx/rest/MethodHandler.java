@@ -1,9 +1,10 @@
 package org.mdvsc.vertx.rest;
 
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.vertx.core.Handler;
+import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
-import org.mdvsc.vertx.ResponseConstants;
 
 import java.lang.reflect.Method;
 import java.util.*;
@@ -37,15 +38,12 @@ class MethodHandler implements Handler<RoutingContext> {
     @Override
     public void handle(RoutingContext event) {
 
-        final Object resourceInstance = contextProvider.provideContext(resourceClass);
-        final Serializer serializer = contextProvider.provideContext(Serializer.class);
-        final MethodInterceptor methodInterceptor = contextProvider.provideContext(MethodInterceptor.class);
-        final HttpServerResponse response = event.response().putHeader(MediaType.CONTENT_TYPE, serializer.mediaType() + ";charset=" + serializer.mediaEncode());
         final Map<Class, Object> map = new HashMap<>();
-
         map.put(RoutingContext.class, event);
-        map.put(HttpServerResponse.class, response);
+        map.put(HttpServerResponse.class, event.response());
+        map.put(HttpServerRequest.class, event.request());
 
+        final Serializer serializer = contextProvider.provideContext(Serializer.class);
         for (MethodCache cache : handleMethods) {
             final Object[] args;
             try {
@@ -54,16 +52,19 @@ class MethodHandler implements Handler<RoutingContext> {
                 // ignored
                 continue;
             }
-            MethodCaller methodCaller = new MethodCaller(cache, resourceInstance, args, response, serializer);
+            final Object resourceInstance = contextProvider.provideContext(resourceClass);
+            final MethodInterceptor methodInterceptor = contextProvider.provideContext(MethodInterceptor.class);
+            MethodCaller methodCaller = new MethodCaller(cache, resourceInstance, args, event, serializer);
+            event.response().headersEndHandler(methodCaller);
             if (methodInterceptor != null) {
-                methodInterceptor.intercept(event, methodCaller);
+                methodInterceptor.intercept(methodCaller);
             } else {
-                methodCaller.endWithCall(event);
+                methodCaller.endWithCall();
             }
             return;
         }
 
-        event.fail(ResponseConstants.STATUS_CODE_BAD_REQUEST);
+        event.fail(HttpResponseStatus.BAD_REQUEST.code());
     }
 
 }

@@ -131,7 +131,6 @@ public class RestMapper implements ContextProvider {
         }
     }
 
-    @Override
     public void injectContext(Object object) {
         if (object != null) {
             for (java.lang.reflect.Field field : object.getClass().getFields()) {
