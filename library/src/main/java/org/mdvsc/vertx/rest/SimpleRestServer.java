@@ -6,9 +6,12 @@ import io.vertx.core.http.*;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
+import org.mdvsc.vertx.utils.StringUtils;
 
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * @author HanikLZ
@@ -102,11 +105,25 @@ public class SimpleRestServer extends AbstractVerticle {
 
     protected void onRouterFailure(HttpServerResponse response, Throwable throwable, Serializer serializer) {
         if (response.getStatusCode() <= 0) response.setStatusCode(HttpResponseStatus.INTERNAL_SERVER_ERROR.code());
+        String content = null;
         if (throwable != null) {
-            response.setStatusMessage(throwable.getMessage()).end(serializer.serialize(throwable.getMessage()));
-        } else {
-            response.end();
+            String message = throwable.getMessage();
+            message = StringUtils.isNullOrBlank(message) ? throwable.getClass().getSimpleName() : message;
+            response.setStatusMessage(message.replace('\r', ' ').replace('\n', ' '));
+            content = buildErrorMessage(throwable, serializer);
         }
+        if (StringUtils.isNullOrBlank(content)) response.end(); else response.end(content);
+    }
+
+    protected String buildErrorMessage(Throwable e, Serializer serializer) {
+        return serializer.serialize(Stream.of(e.getStackTrace()).map(element -> new StringBuilder()
+                .append(element.getLineNumber())
+                .append(':')
+                .append(element.getFileName())
+                .append('/')
+                .append(element.getClassName())
+                .append('.')
+                .append(element.getMethodName())).collect(Collectors.toList()));
     }
 
     public static class Options extends HttpServerOptions {
