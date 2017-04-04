@@ -5,6 +5,8 @@ import io.vertx.core.Handler;
 import io.vertx.core.MultiMap;
 import io.vertx.ext.web.RoutingContext;
 
+import java.lang.reflect.InvocationTargetException;
+
 import static io.vertx.core.http.HttpHeaders.CONTENT_LENGTH;
 import static io.vertx.core.http.HttpHeaders.CONTENT_TYPE;
 
@@ -95,6 +97,8 @@ public class MethodCaller implements Handler<Void> {
         Object result;
         try {
             result = methodCache.getMethod().invoke(caller, arguments);
+        } catch (InvocationTargetException exception) {
+            result = exception.getTargetException();
         } catch (Exception exception) {
             result = exception;
         }

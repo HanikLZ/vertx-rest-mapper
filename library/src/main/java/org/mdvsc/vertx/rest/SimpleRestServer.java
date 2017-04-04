@@ -7,11 +7,16 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
 
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 /**
  * @author HanikLZ
  * @since 2017/3/1
  */
 public class SimpleRestServer extends AbstractVerticle {
+
+    private static final Logger LOGGER = Logger.getLogger("simpleRestServer");
 
     protected final RestMapper restRouteMapper = new RestMapper();
     protected final Options serverOptions;
@@ -52,9 +57,9 @@ public class SimpleRestServer extends AbstractVerticle {
         server.requestHandler(router::accept);
         server.listen(event -> {
             if (event.succeeded()) {
-                System.out.println("rest server success listening at port : " + server.actualPort());
+                LOGGER.log(Level.INFO, "rest server success listening at port : " + server.actualPort());
             } else if (event.failed()) {
-                System.out.println("rest server fail listen at port : " + server.actualPort());
+                LOGGER.log(Level.INFO, "rest server fail listen at port : " + server.actualPort());
                 event.cause().printStackTrace();
             }
         });
@@ -80,8 +85,9 @@ public class SimpleRestServer extends AbstractVerticle {
         router.route().failureHandler(event -> {
             Serializer serializer = restRouteMapper.provideContext(Serializer.class);
             Throwable throwable = event.failure();
-            HttpServerResponse response = event.response().setStatusCode(event.statusCode());
-            onRouterFailure(response, throwable, serializer);
+            int errorCode = HttpResponseStatus.INTERNAL_SERVER_ERROR.code();
+            if (event.statusCode() > 0) errorCode = event.statusCode();
+            onRouterFailure(event.response().setStatusCode(errorCode), throwable, serializer);
         });
         return server;
     }
