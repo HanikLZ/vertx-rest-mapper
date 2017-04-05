@@ -64,7 +64,8 @@ class MethodHandler implements Handler<RoutingContext> {
             return;
         }
 
-        event.fail(HttpResponseStatus.BAD_REQUEST.code());
+        event.next();
+
     }
 
 }
