@@ -77,10 +77,10 @@ public class RestMapper implements ContextProvider {
      *
      * @param router vertx router
      */
-    public void applyTo(final Router router) {
+    public void applyTo(final Router router, String root) {
         contextMap.keySet().parallelStream().forEach(clz -> {
             injectContext(contextMap.get(clz));
-            applyRouteResource(router, clz);
+            applyRouteResource(router, root, clz);
         });
     }
 
@@ -182,7 +182,7 @@ public class RestMapper implements ContextProvider {
         this.methodComparator = methodComparator == null ? DEFAULT_METHOD_COMPARATOR : methodComparator;
     }
 
-    private void applyRouteResource(Router router, Class clz) {
+    private void applyRouteResource(Router router, String root, Class clz) {
         Annotation[] annotations = clz.getDeclaredAnnotations();
         UrlHolder baseUrlHolder = new UrlHolder(annotations);
         for (Method method : clz.getDeclaredMethods()) {
@@ -195,7 +195,7 @@ public class RestMapper implements ContextProvider {
             if (urlHolder.url != null) hasRegexUrl |= urlHolder.url.regex();
             if (urlHolder.produces != null) produces = urlHolder.produces;
             if (urlHolder.consumes != null) consumes = urlHolder.consumes;
-            String urlStr = UrlUtils.appendUrl(baseUrlHolder.url, urlHolder.url);
+            String urlStr = UrlUtils.appendUrl(root, baseUrlHolder.url, urlHolder.url);
             for (Annotation annotation : methodAnnotations) {
                 HttpMethod httpMethod = ANNOTATION_MAP.get(annotation.annotationType());
                 if (httpMethod == null) continue;

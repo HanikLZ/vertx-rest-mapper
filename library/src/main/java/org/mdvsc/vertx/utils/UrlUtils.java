@@ -44,28 +44,24 @@ public class UrlUtils {
         return path;
     }
 
-    public static String appendUrl(URL base, URL path) {
-        boolean hasRegexUrl = base != null && base.regex() || path != null && path.regex();
-        String split;
-        String url;
-        if (hasRegexUrl) split = "\\/"; else split = "/";
-        if (base != null && path != null) {
-            String baseUrl = trimEndSlash(base);
+    public static String appendUrl(String root, URL... paths) {
+        String split = "/";
+        String joinedUrl = root == null ? split : root.endsWith(split) ? root.substring(0, root.length() - split.length()) : root;
+        boolean hasRegexUrl = false;
+        for (URL path : paths) {
+            if (path == null) continue;
             String pathUrl = trimStartSlash(path);
-            if (hasRegexUrl && base.regex()) baseUrl = replaceRegexChar(baseUrl);
-            if (hasRegexUrl && path.regex()) pathUrl = replaceRegexChar(pathUrl);
-            url = baseUrl + split + pathUrl;
-        } else if (base != null) {
-            url = base.value();
-        } else if (path != null) {
-            url = path.value();
-        } else {
-            url = null;
+            if (!hasRegexUrl && path.regex()) {
+                hasRegexUrl = true;
+                joinedUrl = replaceRegexChar(joinedUrl);
+                split = "\\/";
+            }
+            joinedUrl = joinedUrl + split + (path.regex() ? replaceRegexChar(pathUrl) : pathUrl);
         }
-        if (url != null && !url.startsWith(split)) {
-            url = split + url;
+        if (!joinedUrl.startsWith(split)) {
+            joinedUrl = split + joinedUrl;
         }
-        return url;
+        return joinedUrl;
     }
 
 }

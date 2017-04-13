@@ -11,7 +11,8 @@ import java.util.stream.Stream;
  */
 public class MyRestServer extends SimpleRestServer implements MethodInterceptor {
 
-    public MyRestServer() {
+    public MyRestServer(MyRestServer.Options options) {
+        super(options);
         restRouteMapper.addContextClass(SampleResource.class, RootResource.class);
         restRouteMapper.setMethodInterceptor(this);
     }

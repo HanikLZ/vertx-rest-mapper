@@ -100,7 +100,7 @@ public class SimpleRestServer extends AbstractVerticle {
         restRouteMapper.addContextInstances(Vertx.class, vertx);
         restRouteMapper.addContextInstances(HttpServer.class, server);
         restRouteMapper.addContextInstances(io.vertx.core.Context.class, context);
-        restRouteMapper.applyTo(router);
+        restRouteMapper.applyTo(router, serverOptions == null ? null : serverOptions.rootPath);
     }
 
     protected void onRouterFailure(HttpServerResponse response, Throwable throwable, Serializer serializer) {
@@ -129,6 +129,7 @@ public class SimpleRestServer extends AbstractVerticle {
     public static class Options extends HttpServerOptions {
 
         public String uploadPath = null;
+        public String rootPath = null;
         public int bodyLimit = 0;
         public boolean deleteUploadedFilesOnEnd = true;
         public boolean mergeFormAttributes = false;
@@ -138,6 +139,7 @@ public class SimpleRestServer extends AbstractVerticle {
 
         public Options(JsonObject jsonObject) {
             super(jsonObject);
+            rootPath = jsonObject.getString("rootPath", rootPath);
             uploadPath = jsonObject.getString("uploadPath", uploadPath);
             bodyLimit = jsonObject.getInteger("bodyLimit", bodyLimit);
             deleteUploadedFilesOnEnd = jsonObject.getBoolean("deleteUploadedFilesOnEnd", deleteUploadedFilesOnEnd);
