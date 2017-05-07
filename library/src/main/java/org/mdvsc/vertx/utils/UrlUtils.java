@@ -46,7 +46,7 @@ public class UrlUtils {
 
     public static String appendUrl(String root, URL... paths) {
         String split = "/";
-        String joinedUrl = root == null ? split : root.endsWith(split) ? root.substring(0, root.length() - split.length()) : root;
+        String joinedUrl = root == null ? "" : root.endsWith(split) ? root.substring(0, root.length() - split.length()) : root;
         boolean hasRegexUrl = false;
         for (URL path : paths) {
             if (path == null) continue;

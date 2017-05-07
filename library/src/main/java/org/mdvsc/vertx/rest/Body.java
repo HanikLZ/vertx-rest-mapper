@@ -10,4 +10,6 @@ import java.lang.annotation.*;
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.PARAMETER })
-public @interface Body { }
+public @interface Body {
+    String defaultValue() default "";
+}

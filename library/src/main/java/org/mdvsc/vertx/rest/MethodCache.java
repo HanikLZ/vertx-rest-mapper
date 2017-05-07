@@ -7,15 +7,13 @@ import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.FileUpload;
 import io.vertx.ext.web.RoutingContext;
 import org.mdvsc.vertx.utils.CollectionUtils;
+import org.mdvsc.vertx.utils.StringUtils;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
-import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 public class MethodCache {
@@ -143,16 +141,20 @@ public class MethodCache {
             boolean isContext = false;
             for (Annotation annotation : parameterMap.get(parameter)) {
                 if (annotation instanceof Query) {
-                    value = transObject(request.getParam(((Query) annotation).value()), parameter.getType(), serializer);
+                    Query a = (Query) annotation;
+                    value = transFromAnnotation(request.getParam(a.value()), a.defaultValue(), parameter.getType(), serializer);
                     break;
                 } else if (annotation instanceof Header) {
-                    value = transObject(request.getHeader(((Header) annotation).value()), parameter.getType(), serializer);
+                    Header a = (Header) annotation;
+                    value = transFromAnnotation(request.getHeader(a.value()), a.defaultValue(), parameter.getType(), serializer);
                     break;
                 } else if (annotation instanceof Field) {
-                    value = transObject(request.getFormAttribute(((Field) annotation).value()), parameter.getType(), serializer);
+                    Field a = (Field) annotation;
+                    value = transFromAnnotation(request.getFormAttribute(a.value()), a.defaultValue(), parameter.getType(), serializer);
                     break;
                 } else if (annotation instanceof Path) {
-                    value = transObject(context.pathParam(((Path) annotation).value()), parameter.getType(), serializer);
+                    Path a = (Path) annotation;
+                    value = transFromAnnotation(context.pathParam(a.value()), a.defaultValue(), parameter.getType(), serializer);
                     break;
                 } else if (annotation instanceof File) {
                     value = context.fileUploads().parallelStream().filter(fileUpload -> ((File) annotation).value().equals(fileUpload.name())).findFirst();
@@ -182,7 +184,7 @@ public class MethodCache {
                     } else if (type == FileUpload.class) {
                         value = context.fileUploads().iterator().next();
                     } else {
-                        value = transObject(context.getBodyAsString(), type, serializer);
+                        value = transFromAnnotation(context.getBodyAsString(), ((Body)annotation).defaultValue(), type, serializer);
                     }
                     break;
                 } else if (annotation instanceof Context) {
@@ -197,7 +199,6 @@ public class MethodCache {
         return args;
     }
 
-
     private Object provideContext(final Class clz, final ContextProvider provider, final Map<Class, Object> map) {
         Object object = map == null ? null : map.get(clz);
         if (object == null) {
@@ -206,123 +207,9 @@ public class MethodCache {
         return object;
     }
 
-
-    /**
-     * translate string content to target.
-     * @param content content in string
-     * @param target target class
-     * @param serializer Serializer
-     * @return translated object, or throw exception if cannot translate to target class
-     */
-    public static Object transObject(String content, Class target, Serializer serializer) {
-        Object value = content;
-        if (target != String.class) {
-            if (target == Integer.class) {
-                value = Integer.parseInt(content);
-            } else if (target == Long.class) {
-                value = Long.parseLong(content);
-            } else if (target == Float.class) {
-                value = Float.parseFloat(content);
-            } else if (target == Double.class) {
-                value = Double.parseDouble(content);
-            } else if (target == Short.class) {
-                value = Short.parseShort(content);
-            } else if (target == Byte.class) {
-                value = Byte.parseByte(content);
-            } else if (target == Boolean.class) {
-                value = Boolean.parseBoolean(content);
-            } else if (target == String[].class) {
-                value = content.split(Pattern.quote(","));
-            } else if (target == List.class) {
-                value = Arrays.asList(content.split(Pattern.quote(",")));
-            } else if (target == int[].class) {
-                value = Arrays.stream(content.split(Pattern.quote(","))).mapToInt(Integer::parseInt).toArray();
-            } else if (target == long[].class) {
-                value = Arrays.stream(content.split(Pattern.quote(","))).mapToLong(Long::parseLong).toArray();
-            } else if (target == double[].class) {
-                value = Arrays.stream(content.split(Pattern.quote(","))).mapToDouble(Double::parseDouble).toArray();
-            } else if (target == short[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                short[] sr = new short[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Short.parseShort(r[i]);
-                }
-                value = sr;
-            } else if (target == float[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                float[] sr = new float[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Float.parseFloat(r[i]);
-                }
-                value = sr;
-            } else if (target == byte[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                byte[] sr = new byte[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Byte.parseByte(r[i]);
-                }
-                value = sr;
-            } else if (target == boolean[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                boolean[] sr = new boolean[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Boolean.parseBoolean(r[i]);
-                }
-                value = sr;
-            } else if (target == Integer[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                Integer[] sr = new Integer[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Integer.parseInt(r[i]);
-                }
-                value = sr;
-            } else if (target == Long[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                Long[] sr = new Long[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Long.parseLong(r[i]);
-                }
-                value = sr;
-            } else if (target == Double[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                Double[] sr = new Double[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Double.parseDouble(r[i]);
-                }
-                value = sr;
-            } else if (target == Short[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                Short[] sr = new Short[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Short.parseShort(r[i]);
-                }
-                value = sr;
-            } else if (target == Float[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                Float[] sr = new Float[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Float.parseFloat(r[i]);
-                }
-                value = sr;
-            } else if (target == Byte[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                Byte[] sr = new Byte[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Byte.parseByte(r[i]);
-                }
-                value = sr;
-            } else if (target == Boolean[].class) {
-                String[] r = content.split(Pattern.quote(","));
-                Boolean[] sr = new Boolean[r.length];
-                for (int i = 0; i < r.length; i++) {
-                    sr[i] = Boolean.parseBoolean(r[i]);
-                }
-                value = sr;
-            } else {
-                value = serializer.deserialize(content, target);
-            }
-        }
-        return value;
+    private static Object transFromAnnotation(String content, String defaultContent, Class target, Serializer serializer) {
+        if (defaultContent != null && defaultContent.isEmpty()) defaultContent = null;
+        return StringUtils.transObject(content, defaultContent, target, serializer);
     }
 
 }

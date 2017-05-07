@@ -11,5 +11,6 @@ import java.lang.annotation.*;
 @Target({ ElementType.PARAMETER })
 public @interface Query {
     String value();
+    String defaultValue() default "";
 }
 

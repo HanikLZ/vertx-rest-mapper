@@ -2,6 +2,7 @@ package org.mdvsc.vertx.rest;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
 import io.vertx.core.*;
+import io.vertx.core.Context;
 import io.vertx.core.http.*;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
@@ -22,14 +23,18 @@ public class SimpleRestServer extends AbstractVerticle {
     private static final Logger LOGGER = Logger.getLogger("simpleRestServer");
 
     protected final RestMapper restRouteMapper = new RestMapper();
-    protected final Options serverOptions;
+    private String serverOptionConfigKey;
+    private Options serverOptions;
 
     public SimpleRestServer() {
-        serverOptions = null;
     }
 
     public SimpleRestServer(Options serverOptions) {
         this.serverOptions = serverOptions;
+    }
+
+    public SimpleRestServer(String optionConfigKey) {
+        serverOptionConfigKey = optionConfigKey;
     }
 
     public SimpleRestServer(Options serverOptions, Class... resourceClasses) {
@@ -50,6 +55,21 @@ public class SimpleRestServer extends AbstractVerticle {
         this(null, resources);
     }
 
+    @Override
+    public void init(Vertx vertx, Context context) {
+        super.init(vertx, context);
+        JsonObject configObject;
+        if (serverOptions == null && serverOptionConfigKey != null && (configObject = config().getJsonObject(serverOptionConfigKey)) != null) {
+            serverOptions = new Options(configObject);
+        }
+        if (serverOptions == null) {
+            serverOptions = new Options();
+        }
+    }
+
+    public Options getServerOptions() {
+        return serverOptions;
+    }
 
     @Override
     public void start() throws Exception {
@@ -60,30 +80,31 @@ public class SimpleRestServer extends AbstractVerticle {
         server.requestHandler(router::accept);
         server.listen(event -> {
             if (event.succeeded()) {
-                LOGGER.log(Level.INFO, "rest server success listening at port : " + server.actualPort());
+                onServerListening(event.result());
             } else if (event.failed()) {
-                LOGGER.log(Level.INFO, "rest server fail listen at port : " + server.actualPort());
-                event.cause().printStackTrace();
+                onServerListeningFail(event.result(), event.cause());
             }
         });
     }
 
+    protected void onServerListening(HttpServer server) {
+        LOGGER.log(Level.INFO, "rest server success listening at port : " + server.actualPort());
+    }
+
+    protected void onServerListeningFail(HttpServer server, Throwable throwable) {
+        LOGGER.log(Level.INFO, "rest server fail listen at port : " + server.actualPort());
+        throwable.printStackTrace();
+    }
+
     protected HttpServer onCreateServer(Router router) {
-        HttpServer server;
         BodyHandler bodyHandler;
-        if (serverOptions == null) {
-            server = vertx.createHttpServer();
+        if (serverOptions.uploadPath == null) {
             bodyHandler = BodyHandler.create();
         } else {
-            server = vertx.createHttpServer(serverOptions);
-            if (serverOptions.uploadPath == null) {
-                bodyHandler = BodyHandler.create();
-            } else {
-                bodyHandler = BodyHandler.create(serverOptions.uploadPath);
-            }
-            if (serverOptions.bodyLimit > 0) bodyHandler.setBodyLimit(serverOptions.bodyLimit);
-            bodyHandler.setDeleteUploadedFilesOnEnd(serverOptions.deleteUploadedFilesOnEnd).setMergeFormAttributes(serverOptions.mergeFormAttributes);
+            bodyHandler = BodyHandler.create(serverOptions.uploadPath);
         }
+        if (serverOptions.bodyLimit > 0) bodyHandler.setBodyLimit(serverOptions.bodyLimit);
+        bodyHandler.setDeleteUploadedFilesOnEnd(serverOptions.deleteUploadedFilesOnEnd).setMergeFormAttributes(serverOptions.mergeFormAttributes);
         router.route().handler(bodyHandler);
         router.route().failureHandler(event -> {
             Serializer serializer = restRouteMapper.provideContext(Serializer.class);
@@ -92,7 +113,7 @@ public class SimpleRestServer extends AbstractVerticle {
             if (event.statusCode() > 0) errorCode = event.statusCode();
             onRouterFailure(event.response().setStatusCode(errorCode), throwable, serializer);
         });
-        return server;
+        return vertx.createHttpServer(serverOptions);
     }
 
     protected void onInitServerRouter(HttpServer server, Router router) {
@@ -100,7 +121,7 @@ public class SimpleRestServer extends AbstractVerticle {
         restRouteMapper.addContextInstances(Vertx.class, vertx);
         restRouteMapper.addContextInstances(HttpServer.class, server);
         restRouteMapper.addContextInstances(io.vertx.core.Context.class, context);
-        restRouteMapper.applyTo(router, serverOptions == null ? null : serverOptions.rootPath);
+        restRouteMapper.applyTo(router, serverOptions.rootPath);
     }
 
     protected void onRouterFailure(HttpServerResponse response, Throwable throwable, Serializer serializer) {

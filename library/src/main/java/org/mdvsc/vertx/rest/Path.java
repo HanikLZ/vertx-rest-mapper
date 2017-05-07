@@ -11,5 +11,6 @@ import java.lang.annotation.*;
 @Target({ ElementType.PARAMETER })
 public @interface Path {
     String value();
+    String defaultValue() default "";
 }
 
