@@ -1,6 +1,5 @@
 package org.mdvsc.vertx.rest;
 
-import io.netty.handler.codec.http.HttpResponseStatus;
 import io.vertx.core.Handler;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
@@ -44,28 +43,51 @@ class MethodHandler implements Handler<RoutingContext> {
         map.put(HttpServerRequest.class, event.request());
 
         final Serializer serializer = contextProvider.provideContext(Serializer.class);
+
+        MethodCache hitCache = null;
+        Object[] args = null;
+        boolean needSecondRound = false;
+
+        // first round match method to process.
         for (MethodCache cache : handleMethods) {
-            final Object[] args;
+            if (needSecondRound && !cache.hasNonMapAnnotatedParameter()) break;
             try {
-                args = cache.buildInvokeArgs(event, serializer, contextProvider, map);
+                args = cache.buildInvokeArgs(event, serializer, contextProvider, map, false);
+                hitCache = cache;
+                break;
             } catch (Exception ignored) {
-                // ignored
-                continue;
+                if (!needSecondRound) needSecondRound = cache.hasParameterWithDefaultValue();
             }
+        }
+
+        // second round, enable parse parameter default value
+        if (hitCache == null && needSecondRound) {
+            for (MethodCache cache : handleMethods) {
+                if (cache.hasParameterWithDefaultValue() || !cache.hasNonMapAnnotatedParameter()) {
+                    try {
+                        args = cache.buildInvokeArgs(event, serializer, contextProvider, map, true);
+                        hitCache = cache;
+                        break;
+                    } catch (Exception ignored) {
+                        // ignored
+                    }
+                }
+            }
+        }
+
+        if (hitCache != null) { // method hit
             final Object resourceInstance = contextProvider.provideContext(resourceClass);
             final MethodInterceptor methodInterceptor = contextProvider.provideContext(MethodInterceptor.class);
-            MethodCaller methodCaller = new MethodCaller(cache, resourceInstance, args, event, serializer);
+            MethodCaller methodCaller = new MethodCaller(hitCache, resourceInstance, args, event, serializer);
             event.response().headersEndHandler(methodCaller);
             if (methodInterceptor != null) {
                 methodInterceptor.intercept(methodCaller);
             } else {
                 methodCaller.endWithCall();
             }
-            return;
+        } else {
+            event.next();
         }
-
-        event.next();
-
     }
 
 }

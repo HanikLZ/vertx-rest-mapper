@@ -1,7 +1,9 @@
 package org.mdvsc.vertx.rest.sample;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
-import org.mdvsc.vertx.rest.*;
+import org.mdvsc.vertx.rest.MethodCaller;
+import org.mdvsc.vertx.rest.MethodInterceptor;
+import org.mdvsc.vertx.rest.SimpleRestServer;
 
 import java.util.stream.Stream;
 
@@ -13,7 +15,7 @@ public class MyRestServer extends SimpleRestServer implements MethodInterceptor 
 
     public MyRestServer(MyRestServer.Options options) {
         super(options);
-        restRouteMapper.addContextClass(SampleResource.class, RootResource.class);
+        restRouteMapper.addContextClass(SampleResource.class, RootResource.class, SameUrlResource.class);
         restRouteMapper.setMethodInterceptor(this);
     }
 

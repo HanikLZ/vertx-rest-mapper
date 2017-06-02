@@ -1,9 +1,12 @@
 package org.mdvsc.vertx.rest;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.vertx.core.*;
+import io.vertx.core.AbstractVerticle;
 import io.vertx.core.Context;
-import io.vertx.core.http.*;
+import io.vertx.core.Vertx;
+import io.vertx.core.http.HttpServer;
+import io.vertx.core.http.HttpServerOptions;
+import io.vertx.core.http.HttpServerResponse;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.Router;
 import io.vertx.ext.web.handler.BodyHandler;
@@ -58,12 +61,15 @@ public class SimpleRestServer extends AbstractVerticle {
     @Override
     public void init(Vertx vertx, Context context) {
         super.init(vertx, context);
-        JsonObject configObject;
-        if (serverOptions == null && serverOptionConfigKey != null && (configObject = config().getJsonObject(serverOptionConfigKey)) != null) {
-            serverOptions = new Options(configObject);
-        }
         if (serverOptions == null) {
-            serverOptions = new Options();
+            JsonObject configObject = config();
+            if (serverOptionConfigKey != null && !serverOptionConfigKey.isEmpty()) {
+                serverOptions = new Options(configObject.getJsonObject(serverOptionConfigKey));
+            } else if (configObject != null) {
+                serverOptions = new Options(configObject);
+            } else {
+                serverOptions = new Options();
+            }
         }
     }
 

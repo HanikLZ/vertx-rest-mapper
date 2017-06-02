@@ -22,8 +22,10 @@ public class MethodCache {
     private final Annotation[] annotations;
     private final Parameter[] parameters;
     private final Map<Parameter, Annotation[]> parameterMap = new HashMap<>();
-    private final int realParameterSize;
+    private final int annotatedParameterSize;
     private final int mapParameterSize;
+    private final int fileParameterSize;
+    private final int defaultValueParameterSize;
     private final Class returnType;
 
     MethodCache(Method method) {
@@ -32,30 +34,40 @@ public class MethodCache {
         this.parameters = method.getParameters();
         this.annotations = method.getDeclaredAnnotations();
         int size = 0;
+        int defaultValueSize = 0;
         int mapSize = 0;
+        int fileSize = 0;
         for (Parameter parameter : parameters) {
             Annotation[] annotations = parameter.getDeclaredAnnotations();
             parameterMap.put(parameter, annotations);
             for (Annotation annotation : annotations) {
-                if (annotation instanceof Field
-                        || annotation instanceof Query
-                        || annotation instanceof Header
-                        || annotation instanceof File
-                        || annotation instanceof Path) {
-                    size++;
-                    break;
-                } else if (annotation instanceof FieldMap
+                if (annotation instanceof FieldMap
                             || annotation instanceof QueryMap
                             || annotation instanceof HeaderMap
                             || annotation instanceof FileMap
                             || annotation instanceof PathMap) {
                     mapSize++;
-                    break;
-                }
+                } else if (annotation instanceof Field) {
+                    if (!((Field)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                } else if (annotation instanceof Query) {
+                    if (!((Query)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                } else if (annotation instanceof Header) {
+                    if (!((Header)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                } else if (annotation instanceof Path) {
+                    if (!((Path)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                } else if (annotation instanceof Body) {
+                    if (!((Body)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                } else if (annotation instanceof File) {
+                    fileSize++;
+                } else continue;
+                size++;
+                break;
             }
         }
-        realParameterSize = size;
+        annotatedParameterSize = size;
         mapParameterSize = mapSize;
+        fileParameterSize = fileSize;
+        defaultValueParameterSize = defaultValueSize;
     }
 
     /**
@@ -108,11 +120,43 @@ public class MethodCache {
     }
 
     /**
-     * parameter size without annotation Context and mapped parameters
-     * @return parameter size without annotation Context
+     * annotated parameter size
+     * @return parameter size
      */
-    public int getRealParameterSize() {
-        return realParameterSize;
+    public int getAnnotatedParameterSize() {
+        return annotatedParameterSize;
+    }
+
+    /**
+     * annotated but not map parameter size
+     * @return
+     */
+    public int getNonMapAnnotatedParameterSize() {
+        return annotatedParameterSize - mapParameterSize;
+    }
+
+    /**
+     * has annotated but not map parameter
+     * @return true if yes
+     */
+    public boolean hasNonMapAnnotatedParameter() {
+        return annotatedParameterSize - mapParameterSize > 0;
+    }
+
+    /**
+     * parameter size which has default value
+     * @return parameter size
+     */
+    public int getDefaultValueParameterSize() {
+        return defaultValueParameterSize;
+    }
+
+    /**
+     * has parameter with default value
+     * @return true if yes
+     */
+    public boolean hasParameterWithDefaultValue() {
+        return defaultValueParameterSize > 0;
     }
 
     /**
@@ -124,6 +168,14 @@ public class MethodCache {
     }
 
     /**
+     * file parameter size
+     * @return size
+     */
+    public int getFileParameterSize() {
+        return fileParameterSize;
+    }
+
+    /**
      * build method invoke args
      *
      * @param context    routing context
@@ -131,7 +183,7 @@ public class MethodCache {
      * @return arguments to this method
      * @throws Exception exception if arguments can't be build.
      */
-    Object[] buildInvokeArgs(final RoutingContext context, Serializer serializer, ContextProvider provider, Map<Class, Object> contextMap) throws Exception {
+    Object[] buildInvokeArgs(final RoutingContext context, Serializer serializer, ContextProvider provider, Map<Class, Object> contextMap, boolean withDefaultValue) throws Exception {
         HttpServerRequest request = context.request();
         contextMap.put(HttpServerRequest.class, request);
         final Object[] args = new Object[parameters.length];
@@ -142,19 +194,19 @@ public class MethodCache {
             for (Annotation annotation : parameterMap.get(parameter)) {
                 if (annotation instanceof Query) {
                     Query a = (Query) annotation;
-                    value = transFromAnnotation(request.getParam(a.value()), a.defaultValue(), parameter.getType(), serializer);
+                    value = transFromAnnotation(request.getParam(a.value()), withDefaultValue ? a.defaultValue() : null, parameter.getType(), serializer);
                     break;
                 } else if (annotation instanceof Header) {
                     Header a = (Header) annotation;
-                    value = transFromAnnotation(request.getHeader(a.value()), a.defaultValue(), parameter.getType(), serializer);
+                    value = transFromAnnotation(request.getHeader(a.value()), withDefaultValue ? a.defaultValue() : null, parameter.getType(), serializer);
                     break;
                 } else if (annotation instanceof Field) {
                     Field a = (Field) annotation;
-                    value = transFromAnnotation(request.getFormAttribute(a.value()), a.defaultValue(), parameter.getType(), serializer);
+                    value = transFromAnnotation(request.getFormAttribute(a.value()), withDefaultValue ? a.defaultValue() : null, parameter.getType(), serializer);
                     break;
                 } else if (annotation instanceof Path) {
                     Path a = (Path) annotation;
-                    value = transFromAnnotation(context.pathParam(a.value()), a.defaultValue(), parameter.getType(), serializer);
+                    value = transFromAnnotation(context.pathParam(a.value()), withDefaultValue ? a.defaultValue() : null, parameter.getType(), serializer);
                     break;
                 } else if (annotation instanceof File) {
                     value = context.fileUploads().parallelStream().filter(fileUpload -> ((File) annotation).value().equals(fileUpload.name())).findFirst();
@@ -184,7 +236,7 @@ public class MethodCache {
                     } else if (type == FileUpload.class) {
                         value = context.fileUploads().iterator().next();
                     } else {
-                        value = transFromAnnotation(context.getBodyAsString(), ((Body)annotation).defaultValue(), type, serializer);
+                        value = transFromAnnotation(context.getBodyAsString(), withDefaultValue ? ((Body)annotation).defaultValue() : null, type, serializer);
                     }
                     break;
                 } else if (annotation instanceof Context) {

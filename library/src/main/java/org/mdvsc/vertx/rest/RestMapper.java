@@ -9,7 +9,9 @@ import org.mdvsc.vertx.utils.UrlUtils;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
-import java.util.*;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * restful routing mapper
@@ -54,9 +56,18 @@ public class RestMapper implements ContextProvider {
     };
 
     private static final Comparator<MethodCache> DEFAULT_METHOD_COMPARATOR = (o1, o2) -> {
-        int result = o2.getRealParameterSize() - o1.getRealParameterSize();
+
+        // more size of parameters without map parameters match first
+        int result = o2.getNonMapAnnotatedParameterSize() - o1.getNonMapAnnotatedParameterSize();
+
+        // less size of parameters with default value match first
+        if (result == 0) result = o1.getDefaultValueParameterSize() - o2.getDefaultValueParameterSize();
+
+        // more size of mapped parameter size match first
         if (result == 0) result = o2.getMapParameterSize() - o1.getMapParameterSize();
+
         return result;
+
     };
 
     private final Map<Class, Object> contextMap = new HashMap<>();
@@ -179,7 +190,7 @@ public class RestMapper implements ContextProvider {
     }
 
     public void setMethodComparator(Comparator<MethodCache> methodComparator) {
-        this.methodComparator = methodComparator == null ? DEFAULT_METHOD_COMPARATOR : methodComparator;
+        this.methodComparator = methodComparator;
     }
 
     private void applyRouteResource(Router router, String root, Class clz) {
