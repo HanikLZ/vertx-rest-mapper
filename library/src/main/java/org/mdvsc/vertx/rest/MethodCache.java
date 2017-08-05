@@ -15,6 +15,7 @@ import java.lang.reflect.Parameter;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 public class MethodCache {
 
@@ -27,12 +28,23 @@ public class MethodCache {
     private final int fileParameterSize;
     private final int defaultValueParameterSize;
     private final Class returnType;
+    private final boolean isBlocking;
+    private final boolean isOrderBlocking;
 
     MethodCache(Method method) {
         this.method = method;
         this.returnType = method.getReturnType();
         this.parameters = method.getParameters();
         this.annotations = method.getDeclaredAnnotations();
+        Blocking blocking = firstAnnotation(Blocking.class);
+        if (blocking != null) {
+            this.isBlocking = true;
+            this.isOrderBlocking = blocking.value();
+        } else {
+            this.isBlocking = false;
+            this.isOrderBlocking = false;
+        }
+
         int size = 0;
         int defaultValueSize = 0;
         int mapSize = 0;
@@ -104,10 +116,41 @@ public class MethodCache {
 
     /**
      * get method annotations
-     * @return anootation array
+     * @return annotation array
      */
     public Annotation[] getAnnotations() {
         return annotations;
+    }
+
+    /**
+     * find first matched annotation
+     * @param annotationClazz annotation class to find.
+     * @param <T> class type
+     * @return annotation instance or null if not find.
+     */
+    public<T extends Annotation> T firstAnnotation(Class<T> annotationClazz) {
+        for (Annotation a : annotations) {
+            if (annotationClazz.isInstance(a)) {
+                return (T)a;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * is blocking method.
+     * @return true if yes
+     */
+    public boolean isBlocking() {
+        return isBlocking;
+    }
+
+    /**
+     * is order blocking method.
+     * @return true if yes
+     */
+    public boolean isOrderBlocking() {
+        return isOrderBlocking;
     }
 
     /**
@@ -251,7 +294,7 @@ public class MethodCache {
         return args;
     }
 
-    private Object provideContext(final Class clz, final ContextProvider provider, final Map<Class, Object> map) {
+    private Object provideContext(final Class<?> clz, final ContextProvider provider, final Map<Class, Object> map) {
         Object object = map == null ? null : map.get(clz);
         if (object == null) {
             object = provider.provideContext(clz);

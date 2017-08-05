@@ -66,8 +66,6 @@ public class SimpleRestServer extends AbstractVerticle {
             if (serverOptionConfigKey != null && !serverOptionConfigKey.isEmpty()) {
                 serverOptions = new Options(configObject.getJsonObject(serverOptionConfigKey));
             } else if (configObject != null) {
-                serverOptions = new Options(configObject);
-            } else {
                 serverOptions = new Options();
             }
         }
