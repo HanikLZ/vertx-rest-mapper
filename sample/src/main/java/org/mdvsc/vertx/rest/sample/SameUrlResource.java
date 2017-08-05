@@ -15,67 +15,67 @@ import java.util.Map;
 public class SameUrlResource {
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContent() {
         return "no parameter";
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContent(@Query("p1") String p1) {
         return String.format("one parameter : [p1 = %s]", p1);
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContentWithDefault(@Query(value = "p1", defaultValue = "default p1") String p1) {
         return String.format("one parameter and p1 has default value : [p1 = %s]", p1);
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContent(@Query("p1") String p1, @QueryMap Map<String, String> parameterMap) {
         return String.format("one parameters and a map parameter : [p1 = %s, parameter size = %d]", p1, parameterMap.size());
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContent(@Query("p1") String p1, @Query("p2") String p2) {
         return String.format("two parameters : [p1 = %s, p2 = %s]", p1, p2);
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContentWithDefault(@Query("p1") String p1, @Query(value = "p2", defaultValue = "default p2") String p2) {
         return String.format("two parameters and p2 has default value  : [p1 = %s, p2 = %s]", p1, p2);
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContentWithDefault1(@Query(value = "p1", defaultValue = "default p1") String p1, @Query(value = "p2", defaultValue = "default p2") String p2) {
         return String.format("two parameters and p1 and p2 has default value  : [p1 = %s, p2 = %s]", p1, p2);
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContent(@Query("p1") String p1, @Query("p2") String p2, @Query("p3") String p3) {
         return String.format("three parameters : [p1 = %s, p2 = %s, p3 = %s]", p1, p2, p3);
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContentWithDefault(@Query("p1") String p1, @Query("p2") String p2, @Query(value = "p3", defaultValue = "default p3") String p3) {
         return String.format("three parameters and p3 has default value : [p1 = %s, p2 = %s, p3 = %s]", p1, p2, p3);
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContentWithDefault2(@Query("p1") String p1, @Query(value = "p2", defaultValue = "default p2") String p2, @Query(value = "p3", defaultValue = "default p3") String p3) {
         return String.format("three parameters and p2 and p3 has default value : [p1 = %s, p2 = %s, p3 = %s]", p1, p2, p3);
     }
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContentWithDefault3(@Query(value = "p1", defaultValue = "default p1") String p1, @Query(value = "p2", defaultValue = "default p2") String p2, @Query(value = "p3", defaultValue = "default p3") String p3) {
         return String.format("three parameters and p1 and p2 and p3 has default value : [p1 = %s, p2 = %s, p3 = %s]", p1, p2, p3);
     }

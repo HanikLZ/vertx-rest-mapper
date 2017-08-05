@@ -4,7 +4,6 @@ import io.netty.handler.codec.http.HttpResponseStatus;
 import org.mdvsc.vertx.rest.MethodCaller;
 import org.mdvsc.vertx.rest.MethodInterceptor;
 import org.mdvsc.vertx.rest.SimpleRestServer;
-
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.http.HttpServerResponse;
 import org.mdvsc.vertx.rest.*;

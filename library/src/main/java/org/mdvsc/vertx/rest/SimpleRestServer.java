@@ -62,10 +62,10 @@ public class SimpleRestServer extends AbstractVerticle {
     public void init(Vertx vertx, Context context) {
         super.init(vertx, context);
         if (serverOptions == null) {
-            JsonObject configObject = config();
-            if (serverOptionConfigKey != null && !serverOptionConfigKey.isEmpty()) {
-                serverOptions = new Options(configObject.getJsonObject(serverOptionConfigKey));
-            } else if (configObject != null) {
+            JsonObject configObject;
+            if (serverOptionConfigKey != null && (configObject = config().getJsonObject(serverOptionConfigKey)) != null) {
+                serverOptions = new Options(configObject);
+            } else {
                 serverOptions = new Options();
             }
         }
