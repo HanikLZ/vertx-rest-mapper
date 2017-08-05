@@ -1,4 +1,4 @@
-package org.mdvsc.vertx.rest.sample;
+package org.mdvsc.vertx.rest;
 
 import java.lang.annotation.*;
 
@@ -8,7 +8,8 @@ import java.lang.annotation.*;
  */
 @Documented
 @Retention(RetentionPolicy.RUNTIME)
-@Target({ ElementType.METHOD })
-public @interface TestFilter {
+@Target(ElementType.METHOD)
+public @interface Blocking {
+    boolean value() default false;
 }
 

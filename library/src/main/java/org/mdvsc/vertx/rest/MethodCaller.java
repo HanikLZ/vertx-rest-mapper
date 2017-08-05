@@ -1,26 +1,22 @@
 package org.mdvsc.vertx.rest;
 
 import io.netty.handler.codec.http.HttpResponseStatus;
-import io.vertx.core.Handler;
-import io.vertx.core.MultiMap;
+import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.RoutingContext;
-
-import java.lang.reflect.InvocationTargetException;
-
-import static io.vertx.core.http.HttpHeaders.CONTENT_LENGTH;
-import static io.vertx.core.http.HttpHeaders.CONTENT_TYPE;
 
 /**
  * @author HanikLZ
  * @since 2017/4/2
  */
-public class MethodCaller implements Handler<Void> {
+public class MethodCaller {
 
     private final MethodCache methodCache;
     private final Object caller;
     private final Object[] arguments;
     private final RoutingContext context;
     private final Serializer serializer;
+
+    private boolean ended = false;
 
     MethodCaller(MethodCache methodCache, Object caller, Object[] arguments, RoutingContext context, Serializer serializer) {
         this.methodCache = methodCache;
@@ -51,24 +47,19 @@ public class MethodCaller implements Handler<Void> {
     }
 
     public void endWithCall() {
-        if (methodCache.hasReturn()) { // to block if method has return
+        if (methodCache.isBlocking()) { // to block if method has return
             context.vertx().executeBlocking(fut -> {
-                endWithCall(true);
+                endWithCallImpl();
                 fut.complete();
-            }, false, res -> {
+            }, methodCache.isOrderBlocking(), res -> {
                 if (res.failed()) {
                     context.fail(res.cause());
                 }
             });
         } else {
-            endWithCall( false);
+            endWithCallImpl();
         }
-    }
-
-
-    public void endWithFail(HttpResponseStatus status, Throwable e) {
-        endWithFail(status.code());
-        endWithFail(e);
+        ended = true;
     }
 
     public void endWithFail(HttpResponseStatus status) {
@@ -77,36 +68,33 @@ public class MethodCaller implements Handler<Void> {
 
     public void endWithFail(int code) {
         context.fail(code);
+        ended = true;
     }
 
     public void endWithFail(Throwable e) {
         context.fail(e);
+        ended = true;
     }
 
-    @Override
-    public void handle(Void event) {
-        String acceptableContentType = context.getAcceptableContentType();
-        if (acceptableContentType == null) acceptableContentType = serializer.mediaType();
-        MultiMap headers = context.response().headers();
-        if (!headers.contains(CONTENT_TYPE) && !"0".equals(headers.get(CONTENT_LENGTH))) {
-            headers.add(CONTENT_TYPE, acceptableContentType + ";charset=" + serializer.mediaEncode());
-        }
+    public boolean isEnded() {
+        return ended;
     }
 
-    private void endWithCall(boolean hasReturn) {
+    private void endWithCallImpl() {
+        HttpServerResponse response = context.response();
         Object result;
         try {
             result = methodCache.getMethod().invoke(caller, arguments);
-        } catch (InvocationTargetException exception) {
-            result = exception.getTargetException();
         } catch (Exception exception) {
-            result = exception;
+            if (!context.failed()) {
+                context.fail(exception);
+            }
+            return;
         }
-        if (result instanceof Throwable) {
-            endWithFail((Throwable) result);
-        } else if (hasReturn) {
-            if (result == null) context.response().end(); else context.response().end(serializer.serialize(result));
+        if (!response.ended()) {
+           if (result == null) response.end(); else response.end(serializer.serialize(result));
         }
+        ended = true;
     }
 
 }

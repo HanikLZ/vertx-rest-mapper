@@ -14,14 +14,14 @@ import java.util.Map;
 public class SampleResource {
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     public Object simpleContent() {
         return "default return";
     }
 
     @GET
     @URL("test")
-    @TestFilter
+    @NeedAuthorize
     public void simpleContent(@Context HttpServerResponse response, @Context Serializer serializer) {
         response.end(serializer.serialize("no return"));
     }

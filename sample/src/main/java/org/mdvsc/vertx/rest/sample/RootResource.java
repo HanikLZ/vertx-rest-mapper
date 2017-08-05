@@ -1,9 +1,6 @@
 package org.mdvsc.vertx.rest.sample;
 
-import org.mdvsc.vertx.rest.GET;
-import org.mdvsc.vertx.rest.MediaType;
-import org.mdvsc.vertx.rest.Produces;
-import org.mdvsc.vertx.rest.URL;
+import org.mdvsc.vertx.rest.*;
 
 /**
  * @author HanikLZ
@@ -14,10 +11,10 @@ import org.mdvsc.vertx.rest.URL;
 public class RootResource {
 
     @GET
-    @TestFilter
+    @NeedAuthorize
     @Produces(MediaType.APPLICATION_JSON)
-    public Object simpleContent() {
-        return "default return";
+    public Object simpleContent(@Header(value = "userId", defaultValue = "1") int userId) {
+        return "user id = " + userId;
     }
 
 }

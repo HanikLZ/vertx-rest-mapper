@@ -68,7 +68,7 @@ public class RestMapper implements ContextProvider {
      * default constructor
      */
     public RestMapper() {
-        setSerializer(DEFAULT_SERIALIZER);
+        registerContext(Serializer.class, DEFAULT_SERIALIZER);
         setMethodComparator(DEFAULT_METHOD_COMPARATOR);
     }
 
@@ -122,13 +122,13 @@ public class RestMapper implements ContextProvider {
         }
     }
 
-    private <T> void setContext(Class<T> clz, T o, T defaultValue) {
-        if (o == null) {
-            if (defaultValue != null) contextMap.put(clz, defaultValue);
-            else contextMap.remove(clz);
-        } else {
-            contextMap.put(clz, o);
-        }
+    public <T> void registerContext(Class<T> clz, T o) {
+        if (o == null) throw new NullPointerException("register null context.");
+        contextMap.put(clz, o);
+    }
+
+    public <T> T unregisterContext(Class<T> clz) {
+        return (T)contextMap.remove(clz);
     }
 
     public void injectContext(Object object) {
@@ -149,10 +149,10 @@ public class RestMapper implements ContextProvider {
 
     @Override
     public <T> T provideContext(Class<T> clz) {
-        final ContextProvider provider = extraContextProvider;
-        T object = provider != null ? provider.provideContext(clz) : null;
+        T object = (T) contextMap.get(clz);
         if (object == null) {
-            object = (T) contextMap.get(clz);
+            final ContextProvider provider = extraContextProvider;
+            object = provider != null ? provider.provideContext(clz) : null;
         }
         if (object == null && contextMap.containsKey(clz)) {
             try {
@@ -164,14 +164,6 @@ public class RestMapper implements ContextProvider {
             injectContext(object);
         }
         return object;
-    }
-
-    public void setSerializer(Serializer serializer) {
-        setContext(Serializer.class, serializer, DEFAULT_SERIALIZER);
-    }
-
-    public void setMethodInterceptor(MethodInterceptor interceptor) {
-        setContext(MethodInterceptor.class, interceptor, null);
     }
 
     public void setExtraContextProvider(ContextProvider provider) {
