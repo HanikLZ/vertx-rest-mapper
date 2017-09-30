@@ -27,6 +27,7 @@ public class SimpleRestServer extends AbstractVerticle {
 
     protected final RestMapper restRouteMapper = new RestMapper();
     private String serverOptionConfigKey;
+    private HttpServer httpServer;
     private Options serverOptions;
 
     public SimpleRestServer() {
@@ -62,8 +63,12 @@ public class SimpleRestServer extends AbstractVerticle {
     public void init(Vertx vertx, Context context) {
         super.init(vertx, context);
         if (serverOptions == null) {
-            JsonObject configObject;
-            if (serverOptionConfigKey != null && (configObject = config().getJsonObject(serverOptionConfigKey)) != null) {
+            JsonObject configObject = config();
+            if (configObject != null && serverOptionConfigKey != null && !serverOptionConfigKey.isEmpty()) {
+                JsonObject jo = configObject.getJsonObject(serverOptionConfigKey);
+                if (jo != null) configObject = jo;
+            }
+            if (configObject != null) {
                 serverOptions = new Options(configObject);
             } else {
                 serverOptions = new Options();
@@ -79,25 +84,34 @@ public class SimpleRestServer extends AbstractVerticle {
     public void start() throws Exception {
         super.start();
         Router router = Router.router(vertx);
-        HttpServer server = onCreateServer(router);
-        onInitServerRouter(server, router);
-        server.requestHandler(router::accept);
-        server.listen(event -> {
+        httpServer = onCreateServer(router);
+        httpServer.close();
+        onInitServerRouter(httpServer, router);
+        httpServer.requestHandler(router::accept);
+        httpServer.listen(event -> {
             if (event.succeeded()) {
                 onServerListening(event.result());
             } else if (event.failed()) {
-                onServerListeningFail(event.result(), event.cause());
+                onServerListeningFail(event.cause());
             }
         });
+    }
+
+    @Override
+    public void stop() throws Exception {
+        super.stop();
+        if (httpServer != null) {
+            httpServer.close();
+            httpServer = null;
+        }
     }
 
     protected void onServerListening(HttpServer server) {
         LOGGER.log(Level.INFO, "rest server success listening at port : " + server.actualPort());
     }
 
-    protected void onServerListeningFail(HttpServer server, Throwable throwable) {
-        LOGGER.log(Level.INFO, "rest server fail listen at port : " + server.actualPort());
-        throwable.printStackTrace();
+    protected void onServerListeningFail(Throwable throwable) {
+        LOGGER.log(Level.INFO, "rest server start fail : " + throwable.getMessage());
     }
 
     protected HttpServer onCreateServer(Router router) {

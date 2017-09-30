@@ -1,19 +1,20 @@
 package org.mdvsc.vertx.rest;
 
+import io.vertx.core.MultiMap;
 import io.vertx.core.buffer.Buffer;
 import io.vertx.core.http.HttpServerRequest;
 import io.vertx.core.json.JsonArray;
 import io.vertx.core.json.JsonObject;
 import io.vertx.ext.web.FileUpload;
 import io.vertx.ext.web.RoutingContext;
+import org.mdvsc.vertx.collection.GenericMultiMap;
 import org.mdvsc.vertx.utils.CollectionUtils;
 import org.mdvsc.vertx.utils.StringUtils;
 
 import java.lang.annotation.Annotation;
 import java.lang.reflect.Method;
 import java.lang.reflect.Parameter;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -23,28 +24,41 @@ public class MethodCache {
     private final Annotation[] annotations;
     private final Parameter[] parameters;
     private final Map<Parameter, Annotation[]> parameterMap = new HashMap<>();
-    private final int annotatedParameterSize;
-    private final int mapParameterSize;
-    private final int fileParameterSize;
-    private final int defaultValueParameterSize;
     private final Class returnType;
-    private final boolean isBlocking;
-    private final boolean isOrderBlocking;
+    private int annotatedParameterSize;
+    private int mapParameterSize;
+    private int fileParameterSize;
+    private int defaultValueParameterSize;
+    private boolean isHandleEnd;
+    private boolean isBlocking;
+    private boolean isOrderBlocking;
 
     MethodCache(Method method) {
         this.method = method;
         this.returnType = method.getReturnType();
         this.parameters = method.getParameters();
         this.annotations = method.getDeclaredAnnotations();
-        Blocking blocking = firstAnnotation(Blocking.class);
-        if (blocking != null) {
-            this.isBlocking = true;
-            this.isOrderBlocking = blocking.value();
-        } else {
-            this.isBlocking = false;
-            this.isOrderBlocking = false;
-        }
+        checkAnnotations();
+        checkParameterSize();
+    }
 
+    private void checkAnnotations() {
+        boolean isBlocking = false, isOrderBlocking = false, isHandleEnd = false;
+        for (Annotation a : annotations) {
+            if (a instanceof Blocking) {
+                Blocking blocking = (Blocking)a;
+                isBlocking = true;
+                isOrderBlocking = blocking.value();
+            } else if (a instanceof HandleEnd) {
+                isHandleEnd = true ;
+            }
+        }
+        this.isBlocking = isBlocking;
+        this.isOrderBlocking = isOrderBlocking;
+        this.isHandleEnd = isHandleEnd;
+    }
+
+    private void checkParameterSize() {
         int size = 0;
         int defaultValueSize = 0;
         int mapSize = 0;
@@ -129,12 +143,7 @@ public class MethodCache {
      * @return annotation instance or null if not find.
      */
     public<T extends Annotation> T firstAnnotation(Class<T> annotationClazz) {
-        for (Annotation a : annotations) {
-            if (annotationClazz.isInstance(a)) {
-                return (T)a;
-            }
-        }
-        return null;
+        return CollectionUtils.firstElement(annotations, annotationClazz);
     }
 
     /**
@@ -151,6 +160,14 @@ public class MethodCache {
      */
     public boolean isOrderBlocking() {
         return isOrderBlocking;
+    }
+
+    /**
+     * is method has handled end
+     * @return true if yes
+     */
+    public boolean isHandleEnd() {
+        return isHandleEnd;
     }
 
     /**
@@ -231,55 +248,68 @@ public class MethodCache {
         contextMap.put(HttpServerRequest.class, request);
         final Object[] args = new Object[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
-            Parameter parameter = parameters[i];
+            final Parameter parameter = parameters[i];
+            final Class parameterType = parameter.getType();
             Object value = null;
             boolean isContext = false;
-            for (Annotation annotation : parameterMap.get(parameter)) {
+            Annotation[] annotations = parameterMap.get(parameter);
+            Separator separator = CollectionUtils.firstElement(annotations, Separator.class);
+            for (Annotation annotation : annotations) {
                 if (annotation instanceof Query) {
                     Query a = (Query) annotation;
-                    value = transFromAnnotation(request.getParam(a.value()), withDefaultValue ? a.defaultValue() : null, parameter.getType(), serializer);
+                    value = transParams(request.params().getAll(a.value()), a.defaultValue(), parameterType, separator, serializer);
                     break;
                 } else if (annotation instanceof Header) {
                     Header a = (Header) annotation;
-                    value = transFromAnnotation(request.getHeader(a.value()), withDefaultValue ? a.defaultValue() : null, parameter.getType(), serializer);
+                    value = transParams(request.headers().getAll(a.value()), a.defaultValue(), parameterType, separator, serializer);
                     break;
                 } else if (annotation instanceof Field) {
                     Field a = (Field) annotation;
-                    value = transFromAnnotation(request.getFormAttribute(a.value()), withDefaultValue ? a.defaultValue() : null, parameter.getType(), serializer);
+                    value = transParams(request.formAttributes().getAll(a.value()), a.defaultValue(), parameterType, separator, serializer);
                     break;
                 } else if (annotation instanceof Path) {
                     Path a = (Path) annotation;
-                    value = transFromAnnotation(context.pathParam(a.value()), withDefaultValue ? a.defaultValue() : null, parameter.getType(), serializer);
+                    value = transParam(context.pathParam(a.value()), a.defaultValue(), parameterType, separator, serializer);
                     break;
                 } else if (annotation instanceof File) {
-                    value = context.fileUploads().parallelStream().filter(fileUpload -> ((File) annotation).value().equals(fileUpload.name())).findFirst();
+                    Stream<FileUpload> files = context.fileUploads().stream().filter(fileUpload -> ((File) annotation).value().equals(fileUpload.name()));
+                    if (parameterType.isArray()) {
+                        value = CollectionUtils.toTypedArray(files.collect(Collectors.toList()), parameterType.getComponentType());
+                    } else if (List.class.isAssignableFrom(parameterType)) {
+                        value = files.collect(Collectors.toList());
+                    } else {
+                        value = files.findFirst().orElse(null);
+                    }
+                    break;
+                } else if (annotation instanceof FileSet) {
+                    value = context.fileUploads();
                     break;
                 } else if (annotation instanceof FileMap) {
                     value = context.fileUploads().parallelStream().collect(Collectors.toMap(FileUpload::name, (file) -> file, (k, v) -> v));
+                    break;
                 } else if (annotation instanceof QueryMap) {
-                    value = CollectionUtils.toMap(request.params());
+                    value = transMap(request.params(), parameterType);
                     break;
                 } else if (annotation instanceof HeaderMap) {
-                    value = CollectionUtils.toMap(request.headers());
+                    value = transMap(request.headers(), parameterType);
                     break;
                 } else if (annotation instanceof FieldMap) {
-                    value = CollectionUtils.toMap(request.formAttributes());
+                    value = transMap(request.formAttributes(), parameterType);
                     break;
                 } else if (annotation instanceof PathMap) {
                     value = context.pathParams();
                     break;
                 } else if (annotation instanceof Body) {
-                    Class type = parameter.getType();
-                    if (type == JsonObject.class) {
+                    if (parameterType == JsonObject.class) {
                         value = context.getBodyAsJson();
-                    } else if (type == JsonArray.class) {
+                    } else if (parameterType == JsonArray.class) {
                         value = context.getBodyAsJsonArray();
-                    } else if (type == Buffer.class) {
+                    } else if (parameterType == Buffer.class) {
                         value = context.getBody();
-                    } else if (type == FileUpload.class) {
+                    } else if (parameterType == FileUpload.class) {
                         value = context.fileUploads().iterator().next();
                     } else {
-                        value = transFromAnnotation(context.getBodyAsString(), withDefaultValue ? ((Body)annotation).defaultValue() : null, type, serializer);
+                        value = transParam(context.getBodyAsString(), ((Body)annotation).defaultValue(), parameterType, separator, serializer);
                     }
                     break;
                 } else if (annotation instanceof Context) {
@@ -302,9 +332,78 @@ public class MethodCache {
         return object;
     }
 
-    private static Object transFromAnnotation(String content, String defaultContent, Class target, Serializer serializer) {
-        if (defaultContent != null && defaultContent.isEmpty()) defaultContent = null;
-        return StringUtils.transObject(content, defaultContent, target, serializer);
+    private static Object transParams(final List<String> params, final String defaultValue, final Class<?> target, final Separator separator, final Serializer serializer) {
+        if (params.isEmpty()) return null;
+        else if (!target.isArray() && !List.class.isAssignableFrom(target)) return transParam(params.get(0), defaultValue, target, separator, serializer);
+        if (separator != null) {
+            Class element = target.isArray() ? target.getComponentType() : separator.type();
+            Object r = params.stream().flatMap(s -> {
+                Object value = transListParam(s, element, separator, serializer);
+                if (value != null) return ((List) value).stream(); else return Stream.empty();
+            }).collect(Collectors.toList());
+            List list = (List)r;
+            if (list.isEmpty()) list = transListParam(defaultValue, element, separator, serializer);
+            return list == null ? null : target.isArray() ? CollectionUtils.toTypedArray(list, target.getComponentType()) : list;
+        } else {
+            final Class element = target.getComponentType();
+            if (element == null) return params.isEmpty() ? defaultValue == null ? null : Collections.singleton(defaultValue) : params;
+            List<Object> list = params.stream()
+                    .map(s -> transSimpleParam(s, element, serializer))
+                    .filter(Objects::nonNull)
+                    .collect(Collectors.toList());
+            if (list.isEmpty()) list = Collections.singletonList(transSimpleParam( defaultValue, element, serializer));
+            if (list.get(0) == null) return null;
+            if (target.isArray()) return CollectionUtils.toTypedArray(list, element);
+            return list;
+        }
+    }
+
+    private static Object transParam(String param, String defaultValue, Class<?> target, Class<?> element, String separator, String start, String end, Serializer serializer) {
+        if (Constants.isNullValue(defaultValue)) defaultValue = null;
+        if (target.isArray()) element = target.getComponentType();
+        return StringUtils.transObject(param
+                , defaultValue
+                , target
+                , element
+                , StringUtils.isNullOrEmpty(separator) ? null : separator
+                , StringUtils.isNullOrEmpty(start) ? null : start
+                , StringUtils.isNullOrEmpty(end) ? null : end
+                , serializer);
+    }
+
+    private static Object transParam(String param, String defaultValue, Class<?> target, Separator separator, Serializer serializer) {
+        Class type = null;
+        String sep = null;
+        String start = null;
+        String end = null;
+        if (separator != null) {
+            type = separator.type();
+            sep = separator.value();
+            start = separator.start();
+            end = separator.end();
+        }
+        return transParam(param, defaultValue, target, type, sep, start, end, serializer);
+    }
+
+    private static List transListParam(String param, Class<?> element, Separator separator, Serializer serializer) {
+        String sep = null;
+        String start = null;
+        String end = null;
+        if (separator != null) {
+            sep = separator.value();
+            start = separator.start();
+            end = separator.end();
+        }
+        return (List)transParam(param, null, List.class, element, sep, start, end, serializer);
+    }
+
+    private static Object transSimpleParam(String param, Class<?> target, Serializer serializer) {
+        return transParam(param, null, target, null, null, null,  null, serializer);
+    }
+
+    private static Object transMap(MultiMap content, Class target) {
+        return target == MultiMap.class ? new GenericMultiMap(content) : CollectionUtils.toMap(content);
     }
 
 }
+

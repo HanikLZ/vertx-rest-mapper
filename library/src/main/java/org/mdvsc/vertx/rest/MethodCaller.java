@@ -46,20 +46,28 @@ public class MethodCaller {
         return serializer;
     }
 
+    public void setEnd() {
+        ended = true;
+    }
+
+    public boolean isEnded() {
+        return ended;
+    }
+
     public void endWithCall() {
         if (methodCache.isBlocking()) { // to block if method has return
             context.vertx().executeBlocking(fut -> {
                 endWithCallImpl();
                 fut.complete();
             }, methodCache.isOrderBlocking(), res -> {
-                if (res.failed()) {
+                if (res.failed() && !context.failed()) {
                     context.fail(res.cause());
                 }
             });
         } else {
             endWithCallImpl();
         }
-        ended = true;
+        setEnd();
     }
 
     public void endWithFail(HttpResponseStatus status) {
@@ -67,17 +75,13 @@ public class MethodCaller {
     }
 
     public void endWithFail(int code) {
-        context.fail(code);
-        ended = true;
+        if (!context.failed()) context.fail(code);
+        setEnd();
     }
 
     public void endWithFail(Throwable e) {
-        context.fail(e);
-        ended = true;
-    }
-
-    public boolean isEnded() {
-        return ended;
+        if (!context.failed()) context.fail(e);
+        setEnd();
     }
 
     private void endWithCallImpl() {
@@ -91,10 +95,10 @@ public class MethodCaller {
             }
             return;
         }
-        if (!response.ended()) {
+        if (!methodCache.isHandleEnd() && !response.ended()) {
            if (result == null) response.end(); else response.end(serializer.serialize(result));
         }
-        ended = true;
+        setEnd();
     }
 
 }

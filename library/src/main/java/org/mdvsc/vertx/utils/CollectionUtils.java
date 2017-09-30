@@ -2,11 +2,11 @@ package org.mdvsc.vertx.utils;
 
 import io.vertx.core.MultiMap;
 
+import java.lang.reflect.Array;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.function.Consumer;
 
 /**
  * Utils for collection process
@@ -24,6 +24,15 @@ public class CollectionUtils {
         Map<String, String> value = new HashMap<>();
         map.forEach(entry -> value.put(entry.getKey(), entry.getValue()));
         return value;
+    }
+
+    public static Object toTypedArray(List list, Class type) {
+        int size = list.size();
+        Object array = Array.newInstance(type, size);
+        for (int i = 0; i < size; i++) {
+            Array.set(array, i, list.get(i));
+        }
+        return array;
     }
 
     public static boolean isEmptyStringArray(String[] array) {
@@ -50,6 +59,24 @@ public class CollectionUtils {
             }
         }
         return empty;
+    }
+
+    public static <E, T extends E> T firstElement(E[] array, Class<T> elementClass) {
+        for (E e : array) {
+            if (elementClass.isInstance(e)) {
+                return (T)e;
+            }
+        }
+        return null;
+    }
+
+    public static <E, T extends E, C extends Collection<E>> T firstElement(C collection, Class<T> elementClass) {
+        for (E e : collection) {
+            if (elementClass.isInstance(e)) {
+                return (T)e;
+            }
+        }
+        return null;
     }
 
 }

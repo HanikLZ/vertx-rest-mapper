@@ -4,6 +4,7 @@ import io.vertx.core.http.HttpServerResponse;
 import io.vertx.ext.web.FileUpload;
 import org.mdvsc.vertx.rest.*;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -40,7 +41,7 @@ public class SampleResource {
 
     @GET
     @URL("child")
-    public Object getWithChildPath() {
+    public Object getWithChildPath(@Query("object") @Separator(type = TestObject.class) List<TestObject> os) {
         return "child path";
     }
 
