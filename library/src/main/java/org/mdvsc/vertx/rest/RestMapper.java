@@ -89,7 +89,7 @@ public class RestMapper implements ContextProvider {
      * @param router vertx router
      */
     public void applyTo(final Router router, String root) {
-        contextMap.keySet().parallelStream().forEach(clz -> {
+        contextMap.keySet().forEach(clz -> {
             injectContext(contextMap.get(clz));
             applyRouteResource(router, root, clz);
         });
