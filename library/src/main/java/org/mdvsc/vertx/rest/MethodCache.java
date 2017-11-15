@@ -334,7 +334,7 @@ public class MethodCache {
 
     private static Object transParams(final List<String> params, final String defaultValue, final Class<?> target, final Separator separator, final Serializer serializer) {
         if (params.isEmpty() && Constants.isNullValue(defaultValue)) return null;
-        else if (!target.isArray() && !List.class.isAssignableFrom(target)) return transParam(params.get(0), defaultValue, target, separator, serializer);
+        else if (!target.isArray() && !List.class.isAssignableFrom(target)) return transParam(params.isEmpty() ? null : params.get(0), defaultValue, target, separator, serializer);
         if (separator != null) {
             Class element = target.isArray() ? target.getComponentType() : separator.type();
             Object r = params.stream().flatMap(s -> {
