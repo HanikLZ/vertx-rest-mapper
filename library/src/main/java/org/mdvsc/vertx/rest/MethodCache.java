@@ -74,15 +74,15 @@ public class MethodCache {
                             || annotation instanceof PathMap) {
                     mapSize++;
                 } else if (annotation instanceof Field) {
-                    if (!((Field)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                    if (!Constants.isNullValue(((Field)annotation).defaultValue())) defaultValueSize++;
                 } else if (annotation instanceof Query) {
-                    if (!((Query)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                    if (!Constants.isNullValue(((Query)annotation).defaultValue())) defaultValueSize++;
                 } else if (annotation instanceof Header) {
-                    if (!((Header)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                    if (!Constants.isNullValue(((Header)annotation).defaultValue())) defaultValueSize++;
                 } else if (annotation instanceof Path) {
-                    if (!((Path)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                    if (!Constants.isNullValue(((Path)annotation).defaultValue())) defaultValueSize++;
                 } else if (annotation instanceof Body) {
-                    if (!((Body)annotation).defaultValue().isEmpty()) defaultValueSize++;
+                    if (!Constants.isNullValue(((Body)annotation).defaultValue())) defaultValueSize++;
                 } else if (annotation instanceof File) {
                     fileSize++;
                 } else continue;
@@ -257,19 +257,19 @@ public class MethodCache {
             for (Annotation annotation : annotations) {
                 if (annotation instanceof Query) {
                     Query a = (Query) annotation;
-                    value = transParams(request.params().getAll(a.value()), a.defaultValue(), parameterType, separator, serializer);
+                    value = transParams(request.params().getAll(a.value()), withDefaultValue ? a.defaultValue() : null, parameterType, separator, serializer);
                     break;
                 } else if (annotation instanceof Header) {
                     Header a = (Header) annotation;
-                    value = transParams(request.headers().getAll(a.value()), a.defaultValue(), parameterType, separator, serializer);
+                    value = transParams(request.headers().getAll(a.value()), withDefaultValue ? a.defaultValue() : null, parameterType, separator, serializer);
                     break;
                 } else if (annotation instanceof Field) {
                     Field a = (Field) annotation;
-                    value = transParams(request.formAttributes().getAll(a.value()), a.defaultValue(), parameterType, separator, serializer);
+                    value = transParams(request.formAttributes().getAll(a.value()), withDefaultValue ? a.defaultValue() : null, parameterType, separator, serializer);
                     break;
                 } else if (annotation instanceof Path) {
                     Path a = (Path) annotation;
-                    value = transParam(context.pathParam(a.value()), a.defaultValue(), parameterType, separator, serializer);
+                    value = transParam(context.pathParam(a.value()), withDefaultValue ? a.defaultValue() : null, parameterType, separator, serializer);
                     break;
                 } else if (annotation instanceof File) {
                     Stream<FileUpload> files = context.fileUploads().stream().filter(fileUpload -> ((File) annotation).value().equals(fileUpload.name()));
@@ -309,7 +309,7 @@ public class MethodCache {
                     } else if (parameterType == FileUpload.class) {
                         value = context.fileUploads().iterator().next();
                     } else {
-                        value = transParam(context.getBodyAsString(), ((Body)annotation).defaultValue(), parameterType, separator, serializer);
+                        value = transParam(context.getBodyAsString(), withDefaultValue ? ((Body)annotation).defaultValue() : null, parameterType, separator, serializer);
                     }
                     break;
                 } else if (annotation instanceof Context) {
@@ -333,7 +333,7 @@ public class MethodCache {
     }
 
     private static Object transParams(final List<String> params, final String defaultValue, final Class<?> target, final Separator separator, final Serializer serializer) {
-        if (params.isEmpty()) return null;
+        if (params.isEmpty() && Constants.isNullValue(defaultValue)) return null;
         else if (!target.isArray() && !List.class.isAssignableFrom(target)) return transParam(params.get(0), defaultValue, target, separator, serializer);
         if (separator != null) {
             Class element = target.isArray() ? target.getComponentType() : separator.type();
@@ -346,12 +346,12 @@ public class MethodCache {
             return list == null ? null : target.isArray() ? CollectionUtils.toTypedArray(list, target.getComponentType()) : list;
         } else {
             final Class element = target.getComponentType();
-            if (element == null) return params.isEmpty() ? defaultValue == null ? null : Collections.singleton(defaultValue) : params;
+            if (element == null) return params.isEmpty() ? Collections.singleton(defaultValue) : params;
             List<Object> list = params.stream()
                     .map(s -> transSimpleParam(s, element, serializer))
                     .filter(Objects::nonNull)
                     .collect(Collectors.toList());
-            if (list.isEmpty()) list = Collections.singletonList(transSimpleParam( defaultValue, element, serializer));
+            if (list.isEmpty()) list = Collections.singletonList(transSimpleParam(defaultValue, element, serializer));
             if (list.get(0) == null) return null;
             if (target.isArray()) return CollectionUtils.toTypedArray(list, element);
             return list;
@@ -359,7 +359,7 @@ public class MethodCache {
     }
 
     private static Object transParam(String param, String defaultValue, Class<?> target, Class<?> element, String separator, String start, String end, Serializer serializer) {
-        if (Constants.isNullValue(defaultValue)) defaultValue = null;
+        defaultValue = Constants.processNullValue(defaultValue);
         if (target.isArray()) element = target.getComponentType();
         return StringUtils.transObject(param
                 , defaultValue
