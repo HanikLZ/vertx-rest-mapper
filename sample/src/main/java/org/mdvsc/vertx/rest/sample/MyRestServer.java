@@ -14,7 +14,7 @@ public class MyRestServer extends SimpleRestServer {
 
     public MyRestServer(MyRestServer.Options options) {
         super(options);
-        restRouteMapper.addContextClass(SampleResource.class, RootResource.class);
+        restRouteMapper.addContextClass(RootResource.class, ChildResource.class);
         restRouteMapper.registerContext(MethodInterceptor.class, this::interceptCaller);
         restRouteMapper.registerContext(ResponseFilter.class, this::responseFilter);
         restRouteMapper.registerContext(RequestFilter.class, this::requestFilter);

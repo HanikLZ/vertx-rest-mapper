@@ -10,7 +10,9 @@ import java.lang.annotation.*;
 @Retention(RetentionPolicy.RUNTIME)
 @Target({ ElementType.TYPE, ElementType.METHOD })
 public @interface URL {
-    String value();
+    String value() default "/";
     boolean regex() default false;
+    boolean auto() default true;
+    Class child() default URL.class;
 }
 
