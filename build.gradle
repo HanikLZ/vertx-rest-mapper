@@ -1,7 +1,7 @@
 buildscript {
 
 	ext {
-		vertxVersion = '3.7.0'
+		vertxVersion = '3.7.1'
 	}
 
 	repositories {

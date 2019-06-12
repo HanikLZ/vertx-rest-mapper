@@ -86,7 +86,7 @@ public class SimpleRestServer extends AbstractVerticle {
         Router router = Router.router(vertx);
         httpServer = onCreateServer(router);
         onInitServerRouter(httpServer, router);
-        httpServer.requestHandler(router::accept);
+        httpServer.requestHandler(router);
         httpServer.listen(event -> {
             if (event.succeeded()) {
                 onServerListening(event.result());

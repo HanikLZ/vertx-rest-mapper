@@ -245,7 +245,6 @@ public class MethodCache {
      */
     Object[] buildInvokeArgs(final RoutingContext context, Serializer serializer, ContextProvider provider, Map<Class, Object> contextMap, boolean withDefaultValue) throws Exception {
         HttpServerRequest request = context.request();
-        contextMap.put(HttpServerRequest.class, request);
         final Object[] args = new Object[parameters.length];
         for (int i = 0; i < parameters.length; i++) {
             final Parameter parameter = parameters[i];

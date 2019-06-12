@@ -1,6 +1,9 @@
 package org.mdvsc.vertx.rest.sample;
 
+import io.vertx.ext.web.FileUpload;
 import org.mdvsc.vertx.rest.*;
+
+import java.util.Set;
 
 /**
  * @author HanikLZ
@@ -19,7 +22,7 @@ public class RootResource {
 
     @GET
     @NeedAuthorize
-    @URL(value = "test", child = ChildResource.class)
+    @URL(value = "test", mount = ChildResource.class)
     public String testChildResource() {
         return "test ok";
     }
@@ -29,6 +32,11 @@ public class RootResource {
     @URL(value = "test")
     public void testQuery(@Query("test") int test) {
 
+    }
+
+    @POST
+    public void testUpload(@FileSet Set<FileUpload> files) {
+        System.out.println(files.size());
     }
 
 }

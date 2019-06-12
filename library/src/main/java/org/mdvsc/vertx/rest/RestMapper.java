@@ -12,7 +12,6 @@ import java.lang.reflect.Method;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.stream.Stream;
 
 /**
  * restful routing mapper
@@ -92,7 +91,7 @@ public class RestMapper implements ContextProvider {
     public void applyTo(final Router router, String root) {
         contextMap.keySet().forEach(clz -> {
             injectContext(contextMap.get(clz));
-            applyRouteResource(router, root, clz);
+            applyTopRouteResource(router, root, clz);
         });
     }
 
@@ -186,64 +185,59 @@ public class RestMapper implements ContextProvider {
         this.methodComparator = methodComparator;
     }
 
-    private void applyRouteResource(Router router, String baseUrl, Class clz) {
-        UrlHolder baseUrlHolder = UrlHolder.fromClass(clz, baseUrl);
-        if (baseUrlHolder == null || !baseUrlHolder.url.auto()) return;
-        applyRouteResource(router, clz, baseUrlHolder.getUrl(), baseUrlHolder.hasRegexUrl(), baseUrlHolder.produces, baseUrlHolder.consumes);
+    private void applyTopRouteResource(Router router, String baseUrl, Class clz) {
+        UrlHolder baseUrlHolder = UrlHolder.fromClass(clz, baseUrl, false);
+        if (baseUrlHolder == null || baseUrlHolder.ignoreDeploy()) return;
+        applyRouteResource(router, clz, baseUrlHolder.getUrl(), baseUrlHolder.isRegexUrl(), baseUrlHolder.produces, baseUrlHolder.consumes, false);
         applyChildRouteResource(router, baseUrlHolder, false, null, null);
     }
 
     private void applyChildRouteResource(Router router, UrlHolder urlHolder, boolean hasRegexUrl, Produces defaultProduces, Consumes defaultConsumes) {
-        Class child = urlHolder.getUrlChild();
-        if (child != null) {
-            UrlHolder childUrlHolder = UrlHolder.fromClass(child, urlHolder.getUrl());
-            defaultProduces = childUrlHolder.produces == null ? urlHolder.produces == null ? defaultProduces : urlHolder.produces : childUrlHolder.produces;
-            defaultConsumes = childUrlHolder.consumes == null ? urlHolder.consumes == null ? defaultConsumes : urlHolder.consumes : childUrlHolder.consumes;
-            applyRouteResource(router, child, childUrlHolder.getUrl(), childUrlHolder.hasRegexUrl() || urlHolder.hasRegexUrl() || hasRegexUrl, defaultProduces, defaultConsumes);
+        if (urlHolder.hasChildren()) {
+            for (Class child : urlHolder.url.mount()) {
+                UrlHolder childUrlHolder = UrlHolder.fromClass(child, urlHolder.getUrl(), true);
+                defaultProduces = childUrlHolder.produces == null ? urlHolder.produces == null ? defaultProduces : urlHolder.produces : childUrlHolder.produces;
+                defaultConsumes = childUrlHolder.consumes == null ? urlHolder.consumes == null ? defaultConsumes : urlHolder.consumes : childUrlHolder.consumes;
+                applyRouteResource(router, child, childUrlHolder.getUrl(), childUrlHolder.isRegexUrl() || urlHolder.isRegexUrl() || hasRegexUrl, defaultProduces, defaultConsumes, true);
+            }
         }
     }
 
-    private void applyRouteResource(Router router, Class clz, String baseUrl, boolean hasRegexUrl, Produces produces, Consumes consumes) {
+    private void applyRouteResource(Router router, Class clz, String baseUrl, boolean isRegexUrl, Produces produces, Consumes consumes, boolean isApplyChild) {
         for (Method method : clz.getDeclaredMethods()) {
             Annotation[] methodAnnotations = method.getDeclaredAnnotations();
             UrlHolder urlHolder = UrlHolder.fromAnnotations(methodAnnotations, baseUrl, true);
-            hasRegexUrl |= urlHolder.hasRegexUrl();
+            if (!isApplyChild && urlHolder.ignoreDeploy() || isApplyChild && urlHolder.ignoreChildDeploy()) continue;
             if (urlHolder.produces != null) produces = urlHolder.produces;
             if (urlHolder.consumes != null) consumes = urlHolder.consumes;
-            String urlStr = urlHolder.getUrl();
+            isRegexUrl |= urlHolder.isRegexUrl();
+            final char splitChar = ':';
+            final String applyUrlStr = urlHolder.getUrl();
+            StringBuilder builder = new StringBuilder()
+                    .append(isRegexUrl)
+                    .append(splitChar)
+                    .append(applyUrlStr)
+                    .append(splitChar);
+            if (consumes != null) {
+                for (String c : consumes.value()) {
+                    builder.append(c).append('|');
+                }
+            }
+            builder.append(splitChar);
+            if (produces != null) {
+                for (String c : produces.value()) {
+                    builder.append(c).append('|');
+                }
+            }
             for (Annotation annotation : methodAnnotations) {
-                HttpMethod httpMethod = ANNOTATION_MAP.get(annotation.annotationType());
+                Class annotationType = annotation.annotationType();
+                HttpMethod httpMethod = ANNOTATION_MAP.get(annotationType);
                 if (httpMethod != null) {
-                    final boolean autoDeploy = urlHolder.getUrlChild() != null && urlHolder.url.auto();
-                    final boolean applyRegexUrl = hasRegexUrl || autoDeploy;
-                    final String applyUrlStr = autoDeploy ? urlStr + "/.*" : urlStr;
-                    final char splitChar = ':';
-                    StringBuilder builder = new StringBuilder()
-                            .append(applyRegexUrl)
-                            .append(splitChar)
-                            .append(annotation)
-                            .append(splitChar)
-                            .append(applyUrlStr)
-                            .append(splitChar);
-                    if (consumes != null) {
-                        for (String c : consumes.value()) {
-                            builder.append(c).append('|');
-                        }
-                    }
-                    builder.append(splitChar);
-                    if (produces != null) {
-                        for (String c : produces.value()) {
-                            builder.append(c).append('|');
-                        }
-                    }
-                    final String methodKey = builder.toString();
+                    final String methodKey = builder.toString() + splitChar + annotationType;
                     MethodHandler restHandler = methodHandlers.get(methodKey);
                     if (restHandler == null) {
-                        restHandler = new MethodHandler(clz, this);
-                        methodHandlers.put(methodKey, restHandler);
-                        Route route;
-                        if (applyRegexUrl) route = router.routeWithRegex(httpMethod, applyUrlStr);
-                        else route = router.route(httpMethod, applyUrlStr);
+                        methodHandlers.put(methodKey, restHandler = new MethodHandler(clz, this));
+                        Route route = isRegexUrl ? router.routeWithRegex(httpMethod, applyUrlStr) : router.route(httpMethod, applyUrlStr);
                         if (consumes != null) {
                             for (String c : consumes.value()) {
                                 if (!StringUtils.isNullOrBlank(c)) route = route.consumes(c.trim());
@@ -258,8 +252,8 @@ public class RestMapper implements ContextProvider {
                     }
                     restHandler.addHandleMethod(method, methodComparator);
                 }
-                applyChildRouteResource(router, urlHolder, hasRegexUrl, produces, consumes);
             }
+            applyChildRouteResource(router, urlHolder, isRegexUrl, produces, consumes);
         }
     }
 
@@ -292,8 +286,8 @@ public class RestMapper implements ContextProvider {
             return holder;
         }
 
-        static UrlHolder fromClass(Class clz, String baseUrl) {
-            return fromAnnotations(clz.getDeclaredAnnotations(), baseUrl, false);
+        static UrlHolder fromClass(Class clz, String baseUrl, boolean enableNullUrl) {
+            return fromAnnotations(clz.getDeclaredAnnotations(), baseUrl, enableNullUrl);
         }
 
         private UrlHolder(URL url, Produces produces, Consumes consumes) {
@@ -306,16 +300,20 @@ public class RestMapper implements ContextProvider {
             this.baseUrl = baseUrl;
         }
 
-        boolean hasRegexUrl() {
+        boolean isRegexUrl() {
             return url != null && url.regex();
         }
 
-        Class getUrlChild() {
-            Class child = url == null ? null : url.child();
-            if (child == URL.class) {
-                child = null;
-            }
-            return child;
+        boolean hasChildren() {
+            return url != null && url.mount().length > 0;
+        }
+
+        boolean ignoreDeploy() {
+            return url != null && url.ignoreDeploy();
+        }
+
+        boolean ignoreChildDeploy() {
+            return url != null && url.ignoreMount();
         }
 
         String getUrl() {
