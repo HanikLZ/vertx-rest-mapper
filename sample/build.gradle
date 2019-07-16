@@ -1,4 +1,5 @@
 dependencies {
-    compile project(":library")
+    implementation project(":library")
+    implementation "io.reactivex.rxjava2:rxjava:$rxjavaVersion"
 }
 

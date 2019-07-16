@@ -2,6 +2,7 @@ buildscript {
 
 	ext {
 		vertxVersion = '3.7.1'
+		rxjavaVersion = '2.2.10'
 	}
 
 	repositories {

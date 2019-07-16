@@ -18,6 +18,13 @@ public class MethodCaller {
 
     private boolean ended = false;
 
+    private static final Class rxJavaSingle;
+    static {
+        Class s = null;
+        try { s = io.reactivex.Single.class; } catch (Exception ignored) { }
+        rxJavaSingle = s;
+    }
+
     MethodCaller(MethodCache methodCache, Object caller, Object[] arguments, RoutingContext context, Serializer serializer) {
         this.methodCache = methodCache;
         this.caller = caller;
@@ -96,7 +103,10 @@ public class MethodCaller {
             return;
         }
         if (!methodCache.isHandleEnd() && !response.ended()) {
-           if (result == null) response.end(); else response.end(serializer.serialize(result));
+           if (result == null) response.end(); else if (rxJavaSingle != null && rxJavaSingle.isInstance(result)) {
+               io.reactivex.Single single = (io.reactivex.Single)result;
+               single.subscribe(o -> response.end(serializer.serialize(o)), throwable -> { if (!context.failed()) context.fail((Throwable) throwable); });
+           } else response.end(serializer.serialize(result));
         }
         setEnd();
     }

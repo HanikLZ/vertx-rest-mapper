@@ -1,5 +1,6 @@
 package org.mdvsc.vertx.rest.sample;
 
+import io.reactivex.Single;
 import io.vertx.ext.web.FileUpload;
 import org.mdvsc.vertx.rest.*;
 
@@ -37,6 +38,12 @@ public class RootResource {
     @POST
     public void testUpload(@FileSet Set<FileUpload> files) {
         System.out.println(files.size());
+    }
+
+    @GET
+    @URL("testRx")
+    public Single testRx() {
+        return Single.create(emitter -> emitter.onSuccess("success"));
     }
 
 }
